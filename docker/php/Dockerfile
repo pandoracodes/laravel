@@ -38,7 +38,7 @@ RUN npm run build
 FROM php:8.4-fpm-alpine AS runtime
 ARG APP_PATH
 
-COPY --from=mlocati/docker-php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+COPY --from=ghcr.io/mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
 RUN apk add --no-cache \
         icu-libs \
