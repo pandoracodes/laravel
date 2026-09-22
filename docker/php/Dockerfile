@@ -36,7 +36,11 @@ FROM node:22-alpine AS frontend
 ARG APP_PATH
 WORKDIR /app
 COPY ${APP_PATH}/src/package.json ${APP_PATH}/src/package-lock.json ./
-RUN npm ci
+# --legacy-peer-deps: unblock sementara untuk konflik peer-dependency
+# (@vitejs/plugin-vue lama vs vite baru). Perbaikan sebenarnya: bump
+# @vitejs/plugin-vue ke ^6 di package.json app lalu regenerate
+# package-lock.json (lihat catatan di README). Hapus flag ini setelah itu.
+RUN npm ci --legacy-peer-deps
 COPY ${APP_PATH}/src/ ./
 RUN npm run build
 
