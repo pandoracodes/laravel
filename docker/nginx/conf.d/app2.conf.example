@@ -1,7 +1,6 @@
-# Salin file ini jadi app2.conf saat app kedua siap dipakai.
 server {
     listen 8080;
-    server_name app2.example.com; # ganti sesuai hostname tunnel untuk app2
+    server_name app2.example.com; 
 
     root /var/www/apps/app2/public;
     index index.php;

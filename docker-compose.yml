@@ -1,15 +1,3 @@
-# Budget memori total (2 app + nginx + redis) = 492 MB, di bawah batas 512 MB
-# yang diminta, dengan buffer ~20 MB.
-#
-#   nginx        32 MB
-#   ampr        190 MB
-#   app2        190 MB  (nonaktif dulu, aktifkan saat siap)
-#   redis        80 MB
-#   -------------------
-#   total       492 MB
-#
-# Dengan hanya ampr aktif sekarang: 32 + 190 + 80 = 302 MB saja.
-
 x-php-defaults: &php-defaults
   read_only: true
   tmpfs:
@@ -37,14 +25,6 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    # Tidak ada "ports:" sama sekali -> nginx tidak terekspos ke host atau
-    # interface publik VPS. Container cloudflared (didefinisikan di proyek
-    # lain) join ke network "laravel_network" yang sama dan mengakses
-    # nginx lewat DNS internal Docker: http://nginx:8080
-    #
-    # Untuk debug manual dari VPS tanpa cloudflared, uncomment baris ini:
-    # ports:
-    #   - "127.0.0.1:8080:8080"
     volumes:
       - ampr_public:/var/www/apps/ampr/public:ro
       # - app2_public:/var/www/apps/app2/public:ro
@@ -79,7 +59,6 @@ services:
       retries: 5
       start_period: 20s
 
-  # Aktifkan blok ini saat app kedua siap dibuild & di-push:
   # app2:
   #   <<: *php-defaults
   #   image: ghcr.io/satellacodes/app2:latest
@@ -147,11 +126,4 @@ volumes:
 networks:
   laravel_network:
     name: laravel_network
-    # external: true -> network ini dibuat SEKALI lewat
-    # `docker network create laravel_network` (lihat deploy.yml), bukan
-    # oleh compose project ini. Tujuannya supaya:
-    #   1. `docker compose down` di proyek ini tidak ikut menghapus
-    #      network dan memutus cloudflared.
-    #   2. Proyek cloudflared yang terpisah bisa join network yang sama
-    #      lewat `networks: { laravel_network: { external: true } }`.
     external: true
