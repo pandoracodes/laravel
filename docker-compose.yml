@@ -1,0 +1,46 @@
+services:
+  ampr:
+    image: ghcr.io/satellacodes/ampr:latest
+    container_name: ampr
+    env_file: /home/satella/laravel/ampr/.env
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ./ampr/src:/var/www
+      - ./ampr/php/php.ini:/usr/local/etc/php/php.ini
+      - ./ampr/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
+    mem_limit: 128m
+    memswap_limit: 256m
+    cpus: 1
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    restart: unless-stopped
+    networks: [app-network]
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks: [app_network]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  redis_data:
+
+networks:
+  app-network:
+    name: app-network

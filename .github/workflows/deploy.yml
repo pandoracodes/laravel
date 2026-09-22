@@ -1,0 +1,31 @@
+name: Build & Deploy Ampr Laravel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, stb]
+    steps:
+      - uses: actions/checkout@v4 # supaya docker-compose.yml terbaru ikut ter-checkout di STB
+
+      - name: Copy compose file to runtime dir
+        run: cp docker-compose.yml /home/satella/laravel/docker-compose.yml
+
+      - name: Pull & restart containers
+        working-directory: /home/satella/laravel/ampr
+        run: |
+          docker compose pull
+          docker compose up -d --remove-orphans
+
+      - name: Clean old images
+        run: docker image prune -f
