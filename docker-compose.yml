@@ -18,7 +18,7 @@ x-php-defaults: &php-defaults
   security_opt:
     - no-new-privileges:true
   restart: unless-stopped
-  networks: [app-network]
+  networks: [laravel_network]
   cpus: 0.5
   logging:
     driver: json-file
@@ -37,10 +37,14 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    # Bind ke 127.0.0.1 saja: hanya cloudflared di host yang boleh akses,
-    # tidak pernah terekspos ke interface publik VPS.
-    ports:
-      - "127.0.0.1:8080:8080"
+    # Tidak ada "ports:" sama sekali -> nginx tidak terekspos ke host atau
+    # interface publik VPS. Container cloudflared (didefinisikan di proyek
+    # lain) join ke network "laravel_network" yang sama dan mengakses
+    # nginx lewat DNS internal Docker: http://nginx:8080
+    #
+    # Untuk debug manual dari VPS tanpa cloudflared, uncomment baris ini:
+    # ports:
+    #   - "127.0.0.1:8080:8080"
     volumes:
       - ampr_public:/var/www/apps/ampr/public:ro
       # - app2_public:/var/www/apps/app2/public:ro
@@ -50,7 +54,7 @@ services:
     mem_limit: 32m
     memswap_limit: 32m
     cpus: 0.25
-    networks: [app-network]
+    networks: [laravel_network]
     logging:
       driver: json-file
       options:
@@ -116,7 +120,7 @@ services:
       - ""
     volumes:
       - redis_data:/data
-    networks: [app-network]
+    networks: [laravel_network]
     mem_limit: 80m
     memswap_limit: 80m
     cpus: 0.25
@@ -141,9 +145,13 @@ volumes:
   # app2_public:
 
 networks:
-  app-network:
-    name: app-network
-    driver: bridge
-    # Set jadi true kalau app tidak butuh koneksi outbound ke internet
-    # (mis. tidak kirim email/API eksternal) untuk isolasi penuh.
-    internal: false
+  laravel_network:
+    name: laravel_network
+    # external: true -> network ini dibuat SEKALI lewat
+    # `docker network create laravel_network` (lihat deploy.yml), bukan
+    # oleh compose project ini. Tujuannya supaya:
+    #   1. `docker compose down` di proyek ini tidak ikut menghapus
+    #      network dan memutus cloudflared.
+    #   2. Proyek cloudflared yang terpisah bisa join network yang sama
+    #      lewat `networks: { laravel_network: { external: true } }`.
+    external: true
