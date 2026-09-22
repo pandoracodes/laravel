@@ -137,16 +137,56 @@ jaring pengaman kalau ada lonjakan sesaat.
 setengahnya) — ini cuma soft-limit/throttle, jadi tidak masalah kalau
 totalnya melebihi jumlah core asli, tapi lebih presisi kalau disesuaikan.
 
-## Yang perlu disiapkan manual di VPS (tidak ikut di repo)
+## Isi folder `/home/satella/laravel` di VPS
+
+`php.ini`/`opcache.ini`/`www.conf` di-`COPY` ke image saat build (bukan
+di-mount saat runtime), jadi folder `docker/` **tidak perlu** ada di VPS.
+Yang dibutuhkan cuma:
 
 ```
 /home/satella/laravel/
-  env/
-    ampr.env   <- chmod 600, isi APP_KEY, DB_*, REDIS_HOST=redis, dst
-    app2.env   <- nanti
+├── docker-compose.yml   <- disinkron OTOMATIS oleh deploy.yml tiap push,
+│                           jangan diedit manual, akan tertimpa
+└── env/
+    ├── ampr.env         <- dibuat manual SEKALI, chmod 600
+    └── app2.env         <- nanti, saat app2 aktif
 ```
-`REDIS_HOST` di `.env` app harus diisi `redis` (nama service), bukan
+Disiapkan sekali di awal:
+```bash
+mkdir -p /home/satella/laravel/env
+nano /home/satella/laravel/env/ampr.env
+chmod 600 /home/satella/laravel/env/ampr.env
+```
+`REDIS_HOST` di dalam `ampr.env` harus diisi `redis` (nama service), bukan
 `127.0.0.1`.
+
+Volume data (storage, bootstrap/cache, public asset, redis data) dikelola
+Docker sendiri sebagai named volume — bukan folder biasa, tidak perlu
+disentuh manual. Cek isinya kalau perlu lewat:
+```bash
+docker volume inspect laravel_ampr_storage
+```
+
+## Menghubungkan self-hosted runner yang sudah ada di VPS
+
+Runner self-hosted bersifat **outbound-only** — dia yang polling ke
+GitHub, jadi tidak perlu buka port inbound apa pun di firewall VPS. Yang
+perlu dipastikan supaya job `deploy` di `deploy.yml` bisa jalan:
+
+1. **Service runner hidup**: `sudo systemctl status 'actions.runner.*'`
+   (atau `./svc.sh status` di folder instalasi runner).
+2. **Label cocok**: workflow pakai `runs-on: [self-hosted, stb]`. Cek di
+   GitHub → Settings → Actions → Runners bahwa runner-nya punya label
+   `stb`. Kalau belum, reconfigure: `./config.sh remove` lalu
+   `./config.sh --url <repo-url> --token <token> --labels stb`, install
+   ulang service-nya.
+3. **User runner ada di grup `docker`**: `sudo usermod -aG docker
+   <user-runner>`, lalu restart service runner supaya grup baru kepakai.
+4. **`rsync` terpasang** di VPS (dipakai step sync `docker-compose.yml`).
+5. **`/home/satella/laravel` writable** oleh user runner.
+
+Setelah itu tinggal push ke `main` — job `deploy` otomatis diambil runner
+begitu online.
 
 ## Cara menambah app kedua (`app2`)
 
@@ -163,10 +203,38 @@ totalnya melebihi jumlah core asli, tapi lebih presisi kalau disesuaikan.
 
 ## Cloudflare Tunnel (di luar proyek ini, cuma catatan)
 
-Tunnel diarahkan ke `http://127.0.0.1:8080` (bukan langsung ke container),
-karena nginx cuma expose ke `127.0.0.1` di host, tidak pernah ke interface
-publik. Beberapa hostname publik boleh mengarah ke target yang sama; nginx
-yang merutekan berdasarkan `Host` header (`server_name`).
+nginx **tidak** publish port ke host sama sekali. cloudflared (didefinisikan
+di proyek/compose terpisah, di luar repo ini) harus join ke network Docker
+`laravel_network` yang sama, lalu target-nya cukup `http://nginx:8080`
+(nama service, di-resolve lewat DNS internal Docker).
+
+Sekali saja, sebelum compose Laravel ini pertama kali dijalankan:
+```bash
+docker network create laravel_network
+```
+(langkah ini juga sudah otomatis dijalankan idempotent di `deploy.yml`).
+
+Di compose file cloudflared-mu (terpisah dari repo ini), tambahkan:
+```yaml
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    networks: [laravel_network]
+    # ...konfigurasi tunnel lainnya...
+
+networks:
+  laravel_network:
+    external: true
+```
+Beberapa hostname publik (mis. `ampr.domainmu.com`, `app2.domainmu.com`)
+boleh diarahkan ke target `http://nginx:8080` yang sama di `config.yml`
+cloudflared — nginx yang merutekan berdasarkan `Host` header
+(`server_name` di `docker/nginx/conf.d/*.conf`).
+
+Karena `laravel_network` di-set `external: true` di kedua compose (proyek
+ini dan proyek cloudflared), `docker compose down` di salah satu proyek
+**tidak** akan menghapus network dan memutus yang lain.
 
 ## Hal yang perlu kamu sesuaikan sendiri
 

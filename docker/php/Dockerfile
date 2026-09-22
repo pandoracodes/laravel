@@ -15,12 +15,18 @@ FROM composer:2 AS vendor
 ARG APP_PATH
 WORKDIR /app
 COPY ${APP_PATH}/src/composer.json ${APP_PATH}/src/composer.lock ./
+# --ignore-platform-reqs: image composer:2 punya PHP CLI sendiri (bisa beda
+# versi/extension dari target runtime php:8.4-fpm-alpine di stage bawah).
+# Stage ini cuma resolve & download package sesuai composer.lock, bukan
+# menjalankan kode app -> platform-check di sini tidak relevan. Versi PHP
+# & extension yang SEBENARNYA dipakai tetap dijamin benar di stage "runtime".
 RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
-    --no-interaction
+    --no-interaction \
+    --ignore-platform-reqs
 COPY ${APP_PATH}/src/ ./
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative \
     && rm -rf bootstrap/cache/*.php storage/logs/*.log
