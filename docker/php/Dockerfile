@@ -10,16 +10,22 @@
 
 ARG APP_PATH=apps/ampr
 
-# ---------- Stage 1: composer dependencies ----------
-FROM composer:2 AS vendor
+# ---------- Stage 1: build (composer deps + frontend assets) ----------
+# Digabung jadi 1 stage (bukan 2 stage terpisah composer/node) karena
+# @laravel/vite-plugin-wayfinder MEMANGGIL `php artisan wayfinder:generate`
+# di tengah proses `npm run build` -> Node butuh akses ke PHP + vendor/
+# di stage yang sama, tidak bisa lagi diisolasi murni Node-only.
+FROM composer:2 AS build
 ARG APP_PATH
 WORKDIR /app
+
+# --- 1. composer ---
 COPY ${APP_PATH}/src/composer.json ${APP_PATH}/src/composer.lock ./
-# --ignore-platform-reqs: image composer:2 punya PHP CLI sendiri (bisa beda
-# versi/extension dari target runtime php:8.4-fpm-alpine di stage bawah).
-# Stage ini cuma resolve & download package sesuai composer.lock, bukan
-# menjalankan kode app -> platform-check di sini tidak relevan. Versi PHP
-# & extension yang SEBENARNYA dipakai tetap dijamin benar di stage "runtime".
+# --ignore-platform-reqs: PHP CLI bawaan image composer:2 bisa beda versi
+# dari target runtime php:8.4-fpm-alpine di stage bawah. Stage ini cuma
+# resolve & download package sesuai composer.lock, bukan menjalankan kode
+# app -> platform-check di sini tidak relevan. Versi PHP & extension yang
+# SEBENARNYA dipakai tetap dijamin benar di stage "runtime".
 RUN composer install \
     --no-dev \
     --no-scripts \
@@ -27,24 +33,28 @@ RUN composer install \
     --prefer-dist \
     --no-interaction \
     --ignore-platform-reqs
+
 COPY ${APP_PATH}/src/ ./
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative \
     && rm -rf bootstrap/cache/*.php storage/logs/*.log
 
-# ---------- Stage 2: frontend assets (vite/tailwind) ----------
-FROM node:22-alpine AS frontend
-ARG APP_PATH
-WORKDIR /app
-COPY ${APP_PATH}/src/package.json ${APP_PATH}/src/package-lock.json ./
-# --legacy-peer-deps: unblock sementara untuk konflik peer-dependency
-# (@vitejs/plugin-vue lama vs vite baru). Perbaikan sebenarnya: bump
+# --- 2. node, ditambahkan di atas image composer (bukan sebaliknya) ---
+RUN apk add --no-cache nodejs npm
+
+# .env dummy HANYA supaya `artisan wayfinder:generate` bisa boot Laravel
+# saat build (butuh APP_KEY dkk). File ini TIDAK ikut ke image runtime -
+# stage "build" ini seluruhnya dibuang, cuma vendor/ dan public/build yang
+# di-copy ke stage "runtime" lewat COPY --from di bawah.
+RUN cp .env.example .env && php artisan key:generate --ansi
+
+# --legacy-peer-deps: unblock konflik peer-dependency
+# (@vitejs/plugin-vue lama vs vite baru). Perbaikan permanen: bump
 # @vitejs/plugin-vue ke ^6 di package.json app lalu regenerate
-# package-lock.json (lihat catatan di README). Hapus flag ini setelah itu.
+# package-lock.json (lihat README), baru hapus flag ini.
 RUN npm ci --legacy-peer-deps
-COPY ${APP_PATH}/src/ ./
 RUN npm run build
 
-# ---------- Stage 3: runtime ----------
+# ---------- Stage 2: runtime ----------
 FROM php:8.4-fpm-alpine AS runtime
 ARG APP_PATH
 
@@ -85,8 +95,8 @@ WORKDIR /var/www
 # Salin source dulu (tanpa vendor/node_modules, lihat .dockerignore),
 # baru overlay vendor & build assets di atasnya.
 COPY ${APP_PATH}/src/ .
-COPY --from=vendor /app/vendor ./vendor
-COPY --from=frontend /app/public/build ./public/build
+COPY --from=build /app/vendor ./vendor
+COPY --from=build /app/public/build ./public/build
 
 # storage:link harus dibuat sekarang (build time), karena saat runtime
 # public/ read-only (bukan volume) sehingga tidak bisa bikin symlink baru.
