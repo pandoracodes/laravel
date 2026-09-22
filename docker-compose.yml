@@ -1,46 +1,149 @@
+# Budget memori total (2 app + nginx + redis) = 492 MB, di bawah batas 512 MB
+# yang diminta, dengan buffer ~20 MB.
+#
+#   nginx        32 MB
+#   ampr        190 MB
+#   app2        190 MB  (nonaktif dulu, aktifkan saat siap)
+#   redis        80 MB
+#   -------------------
+#   total       492 MB
+#
+# Dengan hanya ampr aktif sekarang: 32 + 190 + 80 = 302 MB saja.
+
+x-php-defaults: &php-defaults
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  networks: [app-network]
+  cpus: 0.5
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
+  nginx:
+    image: ghcr.io/satellacodes/laravel-nginx:latest
+    container_name: nginx
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # Bind ke 127.0.0.1 saja: hanya cloudflared di host yang boleh akses,
+    # tidak pernah terekspos ke interface publik VPS.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ampr_public:/var/www/apps/ampr/public:ro
+      # - app2_public:/var/www/apps/app2/public:ro
+    depends_on:
+      ampr:
+        condition: service_healthy
+    mem_limit: 32m
+    memswap_limit: 32m
+    cpus: 0.25
+    networks: [app-network]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   ampr:
+    <<: *php-defaults
     image: ghcr.io/satellacodes/ampr:latest
     container_name: ampr
-    env_file: /home/satella/laravel/ampr/.env
-    read_only: true
-    tmpfs: [/tmp]
+    env_file: /home/satella/laravel/env/ampr.env
     volumes:
-      - ./ampr/src:/var/www
-      - ./ampr/php/php.ini:/usr/local/etc/php/php.ini
-      - ./ampr/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
-    mem_limit: 128m
-    memswap_limit: 256m
-    cpus: 1
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges]
-    restart: unless-stopped
-    networks: [app-network]
+      - ampr_storage:/var/www/storage
+      - ampr_bootstrap_cache:/var/www/bootstrap/cache
+      - ampr_public:/shared/public
+    mem_limit: 190m
+    memswap_limit: 190m
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Aktifkan blok ini saat app kedua siap dibuild & di-push:
+  # app2:
+  #   <<: *php-defaults
+  #   image: ghcr.io/satellacodes/app2:latest
+  #   container_name: app2
+  #   env_file: /home/satella/laravel/env/app2.env
+  #   volumes:
+  #     - app2_storage:/var/www/storage
+  #     - app2_bootstrap_cache:/var/www/bootstrap/cache
+  #     - app2_public:/shared/public
+  #   mem_limit: 190m
+  #   memswap_limit: 190m
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 20s
 
   redis:
     image: redis:7-alpine
     container_name: redis
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     command:
       - redis-server
       - --appendonly
       - "yes"
       - --maxmemory
-      - 256mb
+      - "48mb"
       - --maxmemory-policy
       - allkeys-lru
+      - --save
+      - ""
     volumes:
       - redis_data:/data
-    networks: [app_network]
+    networks: [app-network]
+    mem_limit: 80m
+    memswap_limit: 80m
+    cpus: 0.25
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
+  ampr_storage:
+  ampr_bootstrap_cache:
+  ampr_public:
   redis_data:
+  # app2_storage:
+  # app2_bootstrap_cache:
+  # app2_public:
 
 networks:
   app-network:
     name: app-network
+    driver: bridge
+    # Set jadi true kalau app tidak butuh koneksi outbound ke internet
+    # (mis. tidak kirim email/API eksternal) untuk isolasi penuh.
+    internal: false

@@ -1,31 +1,89 @@
-name: Build & Deploy Ampr Laravel
+name: Build & Deploy
 
 on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  build:
+  build-app:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    strategy:
+      matrix:
+        include:
+          - app: ampr
+            path: apps/ampr
+          # tambahkan baris ini saat app kedua siap:
+          # - app: app2
+          #   path: apps/app2
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          build-args: |
+            APP_PATH=${{ matrix.path }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.app }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-nginx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/laravel-nginx:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
-    needs: build
+    needs: [build-app, build-nginx]
     runs-on: [self-hosted, stb]
     steps:
-      - uses: actions/checkout@v4 # supaya docker-compose.yml terbaru ikut ter-checkout di STB
+      - uses: actions/checkout@v4
 
-      - name: Copy compose file to runtime dir
-        run: cp docker-compose.yml /home/satella/laravel/docker-compose.yml
+      - name: Login ke GHCR (untuk docker compose pull di runner ini)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Pull & restart containers
-        working-directory: /home/satella/laravel/ampr
+      - name: Sync compose & config ke direktori runtime VPS
         run: |
-          docker compose pull
-          docker compose up -d --remove-orphans
+          mkdir -p /home/satella/laravel
+          rsync -a --delete docker-compose.yml docker/ /home/satella/laravel/
 
-      - name: Clean old images
+      - name: Pull image terbaru
+        working-directory: /home/satella/laravel
+        run: docker compose pull
+
+      - name: Recreate containers
+        working-directory: /home/satella/laravel
+        run: docker compose up -d --remove-orphans
+
+      - name: Bersihkan image lama
         run: docker image prune -f
