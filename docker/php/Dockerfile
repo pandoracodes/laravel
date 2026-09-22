@@ -52,7 +52,12 @@ RUN cp .env.example .env && php artisan key:generate --ansi
 # @vitejs/plugin-vue ke ^6 di package.json app lalu regenerate
 # package-lock.json (lihat README), baru hapus flag ini.
 RUN npm ci --legacy-peer-deps
-RUN npm run build
+# GOMAXPROCS=1: esbuild (dipakai Vite) ditulis di Go dan mem-spawn banyak
+# goroutine paralel. Di bawah emulasi QEMU (build arm64 di runner amd64),
+# threading seagresif itu memicu race condition di Go runtime sendiri ->
+# crash "fatal error: concurrent map writes". Batasi ke 1 thread untuk
+# hindari ini; sedikit lebih lambat, tapi stabil.
+RUN GOMAXPROCS=1 npm run build
 
 # ---------- Stage 2: runtime ----------
 FROM php:8.4-fpm-alpine AS runtime
