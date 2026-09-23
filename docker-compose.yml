@@ -30,9 +30,9 @@ services:
     volumes:
       - ampr_public:/var/www/apps/ampr/public:ro
       # - app2_public:/var/www/apps/app2/public:ro
-    depends_on:
-      ampr:
-        condition: service_healthy
+    # depends_on:
+    #   ampr:
+    #    condition: service_healthy
     mem_limit: 32m
     memswap_limit: 32m
     cpus: 0.25
