@@ -80,6 +80,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    user: "999:1000"
     read_only: true
     tmpfs:
       - /tmp

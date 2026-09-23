@@ -1,10 +1,11 @@
-
 ARG APP_PATH=apps/ampr
+
 FROM composer:2 AS build
 ARG APP_PATH
 WORKDIR /app
 
 COPY ${APP_PATH}/src/composer.json ${APP_PATH}/src/composer.lock ./
+
 RUN composer install \
     --no-dev \
     --no-scripts \
@@ -66,6 +67,8 @@ COPY --from=build /app/vendor ./vendor
 COPY --from=build /app/public/build ./public/build
 
 RUN php artisan storage:link --force || true
+
+RUN mkdir -p /shared/public && chown www-data:www-data /shared/public
 
 RUN chown -R www-data:www-data /var/www \
     && find /var/www -type d -exec chmod 550 {} \; \
