@@ -18,6 +18,8 @@ services:
   nginx:
     image: ghcr.io/pandoracodes/laravel-nginx:latest
     container_name: nginx
+    group_add:
+      - "82"
     read_only: true
     tmpfs:
       - /tmp
@@ -61,7 +63,7 @@ services:
 
   # app2:
   #   <<: *php-defaults
-  #   image: ghcr.io/satellacodes/app2:latest
+  #   image: ghcr.io/pandoracodes/app2:latest
   #   container_name: app2
   #   env_file: /home/satella/laravel/env/app2.env
   #   volumes:
