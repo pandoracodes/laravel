@@ -16,7 +16,7 @@ x-php-defaults: &php-defaults
 
 services:
   nginx:
-    image: ghcr.io/satellacodes/laravel-nginx:latest
+    image: ghcr.io/pandoracodes/laravel-nginx:latest
     container_name: nginx
     read_only: true
     tmpfs:
@@ -43,7 +43,7 @@ services:
 
   ampr:
     <<: *php-defaults
-    image: ghcr.io/satellacodes/ampr:latest
+    image: ghcr.io/pandoracodes/ampr:latest
     container_name: ampr
     env_file: /home/satella/laravel/env/ampr.env
     volumes:
