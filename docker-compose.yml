@@ -54,12 +54,12 @@ services:
       - ampr_public:/shared/public
     mem_limit: 190m
     memswap_limit: 190m
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+  #    healthcheck:
+  #      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
+  #     interval: 30s
+  #    timeout: 5s
+  #    retries: 5
+  #    start_period: 20s
 
   # app2:
   #   <<: *php-defaults
@@ -106,11 +106,11 @@ services:
     mem_limit: 80m
     memswap_limit: 80m
     cpus: 0.25
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+    #  healthcheck:
+    #   test: ["CMD", "redis-cli", "ping"]
+    #   interval: 30s
+    #   timeout: 5s
+    #    retries: 5
     logging:
       driver: json-file
       options:
