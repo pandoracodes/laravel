@@ -93,7 +93,7 @@ services:
     command:
       - redis-server
       - --appendonly
-      - "yes"
+      - "no" #cause my server using emmc :")
       - --maxmemory
       - "48mb"
       - --maxmemory-policy
