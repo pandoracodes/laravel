@@ -16,8 +16,8 @@ jobs:
         include:
           - app: ampr
             path: apps/ampr
-          # - app: app2
-          #   path: apps/app2
+          - app: elsam
+            path: apps/elsam
     steps:
       - uses: actions/checkout@v4
 
