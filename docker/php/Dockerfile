@@ -41,11 +41,14 @@ RUN apk add --no-cache \
         freetype \
         oniguruma \
         libxml2 \
+        libpq \
         tzdata \
         rsync \
     && install-php-extensions \
         pdo_mysql \
         mysqli \
+        pdo_pgsql \
+        pgsql \
         bcmath \
         exif \
         intl \
