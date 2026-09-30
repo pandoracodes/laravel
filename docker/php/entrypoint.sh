@@ -5,6 +5,7 @@ if [ -d /shared/public ]; then
   rsync -a --delete /var/www/public/ /shared/public/
 fi
 
+rm -f /var/www/bootstrap/cache/*.php
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache

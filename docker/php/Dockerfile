@@ -15,7 +15,10 @@ RUN composer install \
     --ignore-platform-reqs
 
 COPY ${APP_PATH}/src/ ./
-RUN composer dump-autoload --optimize --no-dev --classmap-authoritative \
+
+RUN mkdir -p bootstrap/cache storage/logs storage/framework/cache/data \
+             storage/framework/sessions storage/framework/views \
+    && composer dump-autoload --optimize --no-dev --classmap-authoritative --no-scripts \
     && rm -rf bootstrap/cache/*.php storage/logs/*.log
 
 RUN apk add --no-cache nodejs npm
@@ -66,11 +69,15 @@ COPY ${APP_PATH}/src/ .
 COPY --from=build /app/vendor ./vendor
 COPY --from=build /app/public/build ./public/build
 
-RUN php artisan storage:link --force || true
-
-RUN mkdir -p /shared/public && chown www-data:www-data /shared/public
-
-RUN chown -R www-data:www-data /var/www \
+RUN mkdir -p storage/app/public \
+             storage/framework/cache/data \
+             storage/framework/sessions \
+             storage/framework/views \
+             storage/logs \
+             bootstrap/cache \
+             /shared/public \
+    && ln -sfn /var/www/storage/app/public /var/www/public/storage \
+    && chown -R www-data:www-data /var/www /shared/public \
     && find /var/www -type d -exec chmod 550 {} \; \
     && find /var/www -type f -exec chmod 440 {} \; \
     && chmod -R 770 /var/www/storage /var/www/bootstrap/cache
