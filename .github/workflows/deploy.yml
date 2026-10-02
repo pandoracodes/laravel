@@ -89,8 +89,6 @@ jobs:
 
       - name: Recreate containers
         working-directory: /home/satella/laravel
-        env:
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
         run: docker compose up -d --remove-orphans
 
       - name: Bersihkan image lama

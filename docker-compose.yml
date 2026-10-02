@@ -90,8 +90,9 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    environment:
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?isi REDIS_PASSWORD di .env}"
+    env_file:
+      - ./env/ampr.env
+      - ./env/elsam.env
     command:
       - sh
       - -c
