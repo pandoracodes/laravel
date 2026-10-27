@@ -28,7 +28,7 @@ RUN cp .env.example .env && php artisan key:generate --ansi
 RUN npm ci --legacy-peer-deps
 RUN npm run build
 
-FROM php:8.4-fpm-alpine AS runtime
+FROM php:8.4.27-fpm-alpine AS runtime
 ARG APP_PATH
 
 COPY --from=ghcr.io/mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
